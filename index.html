@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cut">
+<meta name="theme-color" content="#111418">
+<title>Gym Tracker</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --text: #15181d;
+    --muted: #6b7280;
+    --line: #e3e5e9;
+    --accent: #e8590c;
+    --accent-soft: #fff1e8;
+    --good: #2b8a3e;
+    --bad: #c92a2a;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111418;
+      --card: #1b1f25;
+      --text: #eef0f3;
+      --muted: #9aa3ae;
+      --line: #2b313a;
+      --accent: #ff7a2f;
+      --accent-soft: #2e2018;
+      --good: #51cf66;
+      --bad: #ff6b6b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  header {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--bg);
+    padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 12px;
+  }
+  header h1 { font-size: 20px; margin: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px; padding-bottom: 60px; }
+  button { font: inherit; cursor: pointer; }
+  .icon-btn {
+    border: 1px solid var(--line); background: var(--card); color: var(--text);
+    border-radius: 10px; padding: 8px 12px; font-size: 15px;
+  }
+  .search {
+    width: 100%; padding: 12px 14px; border-radius: var(--radius);
+    border: 1px solid var(--line); background: var(--card); color: var(--text);
+    font-size: 16px; margin-bottom: 14px;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .machine {
+    text-align: left; border: 1px solid var(--line); background: var(--card); color: var(--text);
+    border-radius: var(--radius); padding: 14px; min-height: 96px;
+    display: flex; flex-direction: column; justify-content: space-between; gap: 8px;
+    transition: transform .08s;
+  }
+  .machine:active { transform: scale(.98); }
+  .machine .name { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; hyphens: auto; }
+  .machine .last { font-size: 13px; color: var(--muted); }
+  .machine .last b { color: var(--accent); font-size: 18px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 14px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .hero { background: var(--accent-soft); border-color: transparent; }
+  .hero .big { font-size: 44px; font-weight: 800; color: var(--accent); line-height: 1; }
+  .hero .big small { font-size: 20px; font-weight: 700; }
+  .hero .sub { color: var(--muted); margin-top: 6px; font-size: 14px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input[type=date], input[type=number], textarea {
+    width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); font-size: 17px;
+  }
+  textarea { font-size: 15px; resize: vertical; min-height: 44px; }
+  .set-row { display: grid; grid-template-columns: 28px 1fr 1fr 40px; gap: 8px; align-items: end; margin-bottom: 8px; }
+  .set-row .num { font-weight: 700; color: var(--muted); padding-bottom: 12px; text-align: center; }
+  .del {
+    border: none; background: transparent; color: var(--muted); font-size: 22px; height: 44px;
+  }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > * { flex: 1; }
+  .btn {
+    border: none; border-radius: 12px; padding: 13px 16px; font-weight: 600; font-size: 16px;
+    background: var(--bg); color: var(--text); border: 1px solid var(--line);
+  }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .session { border-top: 1px solid var(--line); padding: 12px 0; }
+  .session:first-of-type { border-top: none; padding-top: 0; }
+  .session-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .session-head .date { font-weight: 600; }
+  .tag { font-size: 12px; background: var(--accent); color: #fff; border-radius: 999px; padding: 2px 8px; margin-left: 6px; font-weight: 600; }
+  .tag.alt { background: var(--muted); }
+  .sets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; font-size: 14px; }
+  .chip b { font-weight: 700; }
+  .note { font-size: 14px; color: var(--muted); margin-top: 6px; font-style: italic; }
+  .link-del { border: none; background: none; color: var(--bad); font-size: 13px; padding: 4px; }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .compare .box { background: var(--bg); border-radius: 12px; padding: 12px; }
+  .compare .box .t { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .compare .box .v { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .compare .box .d { font-size: 13px; color: var(--muted); }
+  .empty { color: var(--muted); text-align: center; padding: 20px 0; }
+  .up { color: var(--good); } .down { color: var(--bad); }
+  .toast {
+    position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(100px);
+    background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 999px; font-weight: 600;
+    transition: transform .25s; z-index: 20;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .hidden { display: none !important; }
+  .footer-tools { margin-top: 24px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .footer-tools .btn { font-size: 14px; padding: 10px 14px; flex: 0 1 auto; }
+  svg.chart { width: 100%; height: 120px; display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <button id="backBtn" class="icon-btn hidden" aria-label="Zurück">← Zurück</button>
+  <h1 id="title">💪 Meine Geräte</h1>
+</header>
+
+<main>
+  <!-- Übersicht -->
+  <section id="overview">
+    <input id="search" class="search" type="search" placeholder="Gerät suchen…" autocomplete="off">
+    <div id="grid" class="grid"></div>
+    <div class="footer-tools">
+      <button class="btn" id="exportBtn">⬇︎ Daten sichern</button>
+      <button class="btn" id="importBtn">⬆︎ Daten laden</button>
+      <input type="file" id="importFile" accept="application/json" class="hidden">
+    </div>
+  </section>
+
+  <!-- Detail -->
+  <section id="detail" class="hidden">
+    <div class="card hero" id="hero"></div>
+
+    <div class="card">
+      <h2>Training eintragen</h2>
+      <div style="margin-bottom:12px">
+        <label for="date">Datum</label>
+        <input type="date" id="date">
+      </div>
+      <div id="sets"></div>
+      <div class="row" style="margin:6px 0 12px">
+        <button class="btn" id="addSet">+ Satz hinzufügen</button>
+      </div>
+      <div style="margin-bottom:12px">
+        <label for="note">Notiz (optional)</label>
+        <textarea id="note" rows="1" placeholder="z. B. Sitzhöhe 4, fühlte sich leicht an"></textarea>
+      </div>
+      <button class="btn primary" id="save" style="width:100%">Speichern</button>
+    </div>
+
+    <div class="card" id="compareCard"></div>
+    <div class="card" id="chartCard"></div>
+
+    <div class="card">
+      <h2>Verlauf</h2>
+      <div id="history"></div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const MACHINES = [
+  "Trizepsmaschine", "Bizepsmaschine", "Latzug", "Butterfly Brust", "Butterfly Rücken",
+  "Rotary Torso", "Rudermaschine", "Klimmzug", "Bauchmuskelmaschine", "Lateral Raise",
+  "Glute Extension", "Multipresse", "Rückenstrecker", "Beinstrecker", "Beinpresse",
+  "Diverging Low Tower", "Abduktor", "Adduktor"
+];
+const KEY = "gymTracker.v1";
+
+// Datenformat: { [gerät]: [ { id, date: "YYYY-MM-DD", sets: [{kg, reps}], note } ] }
+let data = load();
+let current = null;
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; }
+}
+function persist() {
+  try { localStorage.setItem(KEY, JSON.stringify(data)); }
+  catch { toast("Speichern fehlgeschlagen!"); }
+}
+function sessions(m) {
+  return (data[m] || []).slice().sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+}
+function topSet(s) {
+  return s.sets.reduce((best, x) => (x.kg > best.kg || (x.kg === best.kg && x.reps > best.reps)) ? x : best, s.sets[0]);
+}
+function today() {
+  const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+function fmtDate(iso) {
+  const d = new Date(iso + "T12:00:00");
+  return d.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" });
+}
+function daysAgo(iso) {
+  const diff = Math.round((new Date(today() + "T12:00:00") - new Date(iso + "T12:00:00")) / 86400000);
+  if (diff === 0) return "heute";
+  if (diff === 1) return "gestern";
+  if (diff < 0) return `in ${-diff} Tagen`;
+  return `vor ${diff} Tagen`;
+}
+function fmtKg(n) { return (Math.round(n * 100) / 100).toLocaleString("de-DE"); }
+function volume(s) { return s.sets.reduce((sum, x) => sum + x.kg * x.reps, 0); }
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+let toastTimer;
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+/* ---------- Übersicht ---------- */
+function renderGrid() {
+  const q = document.getElementById("search").value.trim().toLowerCase();
+  const grid = document.getElementById("grid");
+  grid.innerHTML = "";
+  MACHINES.filter(m => m.toLowerCase().includes(q)).forEach(m => {
+    const last = sessions(m)[0];
+    const btn = document.createElement("button");
+    btn.className = "machine";
+    btn.innerHTML = `<span class="name">${esc(m)}</span>` + (last
+      ? `<span class="last"><b>${fmtKg(topSet(last).kg)} kg</b> × ${topSet(last).reps}<br>${daysAgo(last.date)}</span>`
+      : `<span class="last">noch kein Eintrag</span>`);
+    btn.onclick = () => openMachine(m);
+    grid.appendChild(btn);
+  });
+}
+
+/* ---------- Detail ---------- */
+function openMachine(m, push = true) {
+  current = m;
+  document.getElementById("overview").classList.add("hidden");
+  document.getElementById("detail").classList.remove("hidden");
+  document.getElementById("backBtn").classList.remove("hidden");
+  document.getElementById("title").textContent = m;
+  document.getElementById("date").value = today();
+  document.getElementById("note").value = "";
+  const last = sessions(m)[0];
+  // Formular mit den Sätzen vom letzten Mal vorbefüllen
+  const pre = last ? last.sets.map(s => ({ ...s })) : [{ kg: "", reps: "" }];
+  document.getElementById("sets").innerHTML = "";
+  pre.forEach(s => addSetRow(s.kg, s.reps));
+  renderDetail();
+  if (push) history.pushState({ m }, "", "#" + encodeURIComponent(m));
+  window.scrollTo(0, 0);
+}
+function closeMachine() {
+  current = null;
+  document.getElementById("detail").classList.add("hidden");
+  document.getElementById("overview").classList.remove("hidden");
+  document.getElementById("backBtn").classList.add("hidden");
+  document.getElementById("title").textContent = "💪 Meine Geräte";
+  renderGrid();
+}
+
+function addSetRow(kg = "", reps = "") {
+  const wrap = document.getElementById("sets");
+  const row = document.createElement("div");
+  row.className = "set-row";
+  row.innerHTML = `
+    <span class="num"></span>
+    <div><label>Kilo</label><input type="number" inputmode="decimal" step="0.5" min="0" class="kg" value="${kg}"></div>
+    <div><label>Wdh.</label><input type="number" inputmode="numeric" step="1" min="0" class="reps" value="${reps}"></div>
+    <button class="del" aria-label="Satz entfernen">×</button>`;
+  row.querySelector(".del").onclick = () => {
+    if (wrap.children.length > 1) { row.remove(); renumber(); }
+    else { row.querySelector(".kg").value = ""; row.querySelector(".reps").value = ""; }
+  };
+  wrap.appendChild(row);
+  renumber();
+}
+function renumber() {
+  [...document.querySelectorAll("#sets .set-row .num")].forEach((n, i) => n.textContent = i + 1);
+}
+
+function renderDetail() {
+  const list = sessions(current);
+  const [last, prev] = list;
+
+  // Hero: letztes Gewicht
+  const hero = document.getElementById("hero");
+  if (last) {
+    const t = topSet(last);
+    hero.innerHTML = `
+      <h2>Letztes Gewicht</h2>
+      <div class="big">${fmtKg(t.kg)} <small>kg</small></div>
+      <div class="sub">${t.reps} Wiederholungen · ${last.sets.length} ${last.sets.length === 1 ? "Satz" : "Sätze"} · ${fmtDate(last.date)} (${daysAgo(last.date)})</div>`;
+  } else {
+    hero.innerHTML = `<h2>Letztes Gewicht</h2><div class="sub">Noch kein Training an diesem Gerät eingetragen.</div>`;
+  }
+
+  // Vergleich letztes / vorletztes Training
+  const cmp = document.getElementById("compareCard");
+  if (last) {
+    const box = (label, s) => {
+      if (!s) return `<div class="box"><div class="t">${label}</div><div class="v">–</div><div class="d">kein Eintrag</div></div>`;
+      const t = topSet(s);
+      return `<div class="box"><div class="t">${label}</div>
+        <div class="v">${fmtKg(t.kg)} kg × ${t.reps}</div>
+        <div class="d">${fmtDate(s.date)}</div>
+        <div class="sets">${s.sets.map(x => `<span class="chip"><b>${fmtKg(x.kg)}</b> kg × ${x.reps}</span>`).join("")}</div></div>`;
+    };
+    let trend = "";
+    if (prev) {
+      const dKg = topSet(last).kg - topSet(prev).kg;
+      const dReps = topSet(last).reps - topSet(prev).reps;
+      if (dKg > 0) trend = `<span class="up">▲ +${fmtKg(dKg)} kg gegenüber vorletztem Training</span>`;
+      else if (dKg < 0) trend = `<span class="down">▼ ${fmtKg(dKg)} kg gegenüber vorletztem Training</span>`;
+      else if (dReps > 0) trend = `<span class="up">▲ gleiches Gewicht, +${dReps} Wdh.</span>`;
+      else if (dReps < 0) trend = `<span class="down">▼ gleiches Gewicht, ${dReps} Wdh.</span>`;
+      else trend = `<span>＝ gleiche Leistung wie beim vorletzten Mal</span>`;
+    }
+    cmp.innerHTML = `<h2>Letztes vs. vorletztes Training</h2>
+      <div class="compare">${box("Letztes", last)}${box("Vorletztes", prev)}</div>
+      ${trend ? `<div style="margin-top:10px;font-size:14px;font-weight:600">${trend}</div>` : ""}`;
+    cmp.classList.remove("hidden");
+  } else cmp.classList.add("hidden");
+
+  // Diagramm Gewichtsverlauf
+  const chart = document.getElementById("chartCard");
+  const pts = list.slice(0, 20).reverse();
+  if (pts.length >= 2) {
+    const W = 600, H = 120, P = 14;
+    const ys = pts.map(s => topSet(s).kg);
+    const min = Math.min(...ys), max = Math.max(...ys), span = (max - min) || 1;
+    const xy = pts.map((s, i) => [P + i * (W - 2 * P) / (pts.length - 1), H - P - (ys[i] - min) / span * (H - 2 * P)]);
+    chart.innerHTML = `<h2>Gewichtsverlauf (max. Gewicht)</h2>
+      <svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+        <polyline fill="none" stroke="var(--accent)" stroke-width="3" stroke-linejoin="round" vector-effect="non-scaling-stroke"
+          points="${xy.map(p => p.join(",")).join(" ")}"/>
+        ${xy.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="4" fill="var(--accent)" vector-effect="non-scaling-stroke"/>`).join("")}
+      </svg>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:4px">
+        <span>${fmtDate(pts[0].date)}</span><span>${fmtKg(min)}–${fmtKg(max)} kg</span><span>${fmtDate(pts[pts.length - 1].date)}</span>
+      </div>`;
+    chart.classList.remove("hidden");
+  } else chart.classList.add("hidden");
+
+  // Verlauf
+  const h = document.getElementById("history");
+  if (!list.length) { h.innerHTML = `<div class="empty">Noch keine Einträge.</div>`; return; }
+  h.innerHTML = list.map((s, i) => `
+    <div class="session">
+      <div class="session-head">
+        <div><span class="date">${fmtDate(s.date)}</span>
+          ${i === 0 ? '<span class="tag">Letztes</span>' : i === 1 ? '<span class="tag alt">Vorletztes</span>' : ""}</div>
+        <button class="link-del" data-id="${s.id}">Löschen</button>
+      </div>
+      <div class="sets">${s.sets.map((x, n) => `<span class="chip">${n + 1}. <b>${fmtKg(x.kg)}</b> kg × ${x.reps}</span>`).join("")}</div>
+      <div class="note">${daysAgo(s.date)} · Volumen ${fmtKg(volume(s))} kg${s.note ? " · " + esc(s.note) : ""}</div>
+    </div>`).join("");
+  h.querySelectorAll(".link-del").forEach(b => b.onclick = () => {
+    if (!confirm("Diesen Eintrag wirklich löschen?")) return;
+    data[current] = (data[current] || []).filter(s => s.id !== Number(b.dataset.id));
+    persist(); renderDetail(); toast("Eintrag gelöscht");
+  });
+}
+
+function save() {
+  const date = document.getElementById("date").value;
+  if (!date) return toast("Bitte Datum wählen");
+  const sets = [...document.querySelectorAll("#sets .set-row")].map(r => ({
+    kg: parseFloat(r.querySelector(".kg").value.replace(",", ".")),
+    reps: parseInt(r.querySelector(".reps").value, 10)
+  })).filter(s => !isNaN(s.kg) && !isNaN(s.reps) && s.reps > 0);
+  if (!sets.length) return toast("Bitte Kilo und Wiederholungen eingeben");
+  const note = document.getElementById("note").value.trim();
+  (data[current] ||= []).push({ id: Date.now(), date, sets, note });
+  persist();
+  document.getElementById("note").value = "";
+  renderDetail();
+  toast("Gespeichert ✓");
+}
+
+/* ---------- Export / Import ---------- */
+function exportData() {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `gym-daten-${today()}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function importData(file) {
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const obj = JSON.parse(r.result);
+      if (typeof obj !== "object" || Array.isArray(obj)) throw 0;
+      if (!confirm("Vorhandene Daten durch die Datei ersetzen?")) return;
+      data = obj; persist(); renderGrid(); toast("Daten geladen ✓");
+    } catch { toast("Ungültige Datei"); }
+  };
+  r.readAsText(file);
+}
+
+/* ---------- Events ---------- */
+document.getElementById("search").oninput = renderGrid;
+document.getElementById("backBtn").onclick = () => history.back();
+document.getElementById("addSet").onclick = () => {
+  const rows = document.querySelectorAll("#sets .set-row");
+  const lastRow = rows[rows.length - 1];
+  addSetRow(lastRow ? lastRow.querySelector(".kg").value : "", lastRow ? lastRow.querySelector(".reps").value : "");
+};
+document.getElementById("save").onclick = save;
+document.getElementById("exportBtn").onclick = exportData;
+document.getElementById("importBtn").onclick = () => document.getElementById("importFile").click();
+document.getElementById("importFile").onchange = e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ""; };
+window.addEventListener("popstate", () => {
+  const m = decodeURIComponent(location.hash.slice(1));
+  if (MACHINES.includes(m)) { if (current !== m) openMachine(m, false); } else closeMachine();
+});
+
+renderGrid();
+const startM = decodeURIComponent(location.hash.slice(1));
+if (MACHINES.includes(startM)) { history.replaceState(null, "", location.pathname); openMachine(startM); }
+</script>
+</body>
+</html>
