@@ -19,7 +19,7 @@
     --radius: 14px;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       --bg: #111418;
       --card: #1b1f25;
       --text: #eef0f3;
@@ -30,6 +30,17 @@
       --good: #51cf66;
       --bad: #ff6b6b;
     }
+  }
+  :root[data-theme="dark"] {
+      --bg: #111418;
+      --card: #1b1f25;
+      --text: #eef0f3;
+      --muted: #9aa3ae;
+      --line: #2b313a;
+      --accent: #ff7a2f;
+      --accent-soft: #2e2018;
+      --good: #51cf66;
+      --bad: #ff6b6b;
   }
   * { box-sizing: border-box; }
   body {
@@ -143,6 +154,7 @@
       <button class="btn" id="importBtn">⬆︎ Daten laden</button>
       <input type="file" id="importFile" accept="application/json" class="hidden">
     </div>
+    <p id="status" style="text-align:center;font-size:13px;color:var(--muted);margin-top:14px">Auf diesem Gerät gespeichert</p>
   </section>
 
   <!-- Detail -->
@@ -194,9 +206,68 @@ let current = null;
 function load() {
   try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; }
 }
-function persist() {
-  try { localStorage.setItem(KEY, JSON.stringify(data)); }
-  catch { toast("Speichern fehlgeschlagen!"); }
+function cacheLocal() {
+  try { localStorage.setItem(KEY, JSON.stringify(data)); } catch {}
+}
+// Speichert ein Gerät (oder alle) lokal und – falls verfügbar – in der Cloud
+function persist(machines = MACHINES) {
+  cacheLocal();
+  if (cloud) machines.forEach(m => cloudWrite(m));
+}
+
+/* ---------- Cloud-Speicher (claude.ai Artifact) ---------- */
+let cloud = null;            // CollectionReference für data/users/<id>
+const writeChains = {};      // eine Schreiboperation pro Dokument gleichzeitig
+function slug(m) {
+  return m.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-");
+}
+function cloudWrite(m) {
+  const ref = cloud.doc(slug(m));
+  const body = { name: m, sessions: data[m] || [] };
+  writeChains[m] = (writeChains[m] || Promise.resolve()).then(async () => {
+    try { await ref.set(body); }
+    catch (e) {
+      if (e && e.code === "unavailable") {
+        await new Promise(r => setTimeout(r, 500 + Math.random() * 1000));
+        try { await ref.set(body); return; } catch {}
+      }
+      setStatus("⚠︎ Cloud-Speichern fehlgeschlagen – lokal gesichert");
+    }
+  });
+}
+function setStatus(t) { document.getElementById("status").textContent = t; }
+
+async function initCloud() {
+  if (!window.claude || typeof window.claude.use !== "function") return;
+  try {
+    const [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+    if (!db || !user) return;
+    const uid = await user.id();
+    if (!uid) return;
+    const col = db.collection("data/users/" + uid);
+    setStatus("☁︎ Verbinde…");
+    const timer = setTimeout(() => setStatus("⚠︎ Cloud gerade nicht erreichbar – Daten evtl. nicht aktuell"), 10000);
+    let first = true;
+    col.onSnapshot(snap => {
+      if (!snap.metadata.fromCache) clearTimeout(timer);
+      const remote = {};
+      snap.docs.forEach(d => { const b = d.data(); if (b && MACHINES.includes(b.name)) remote[b.name] = (b.sessions || []).map(x => ({ ...x, sets: x.sets.map(y => ({ ...y })) })); });
+      if (first && !snap.metadata.fromCache) {
+        first = false;
+        cloud = col;
+        // Einmalige Übernahme von Daten, die vorher nur lokal lagen
+        const localOnly = MACHINES.filter(m => (data[m] || []).length && !remote[m]);
+        localOnly.forEach(m => { remote[m] = data[m]; });
+        data = remote; cacheLocal();
+        localOnly.forEach(m => cloudWrite(m));
+      } else if (!first) {
+        data = remote; cacheLocal();
+      } else return;
+      setStatus("☁︎ In deinem Konto gespeichert");
+      renderGrid();
+      if (current) renderDetail();
+    }, () => { clearTimeout(timer); cloud = null; setStatus("Nur auf diesem Gerät gespeichert"); });
+  } catch { /* läuft ohne Cloud weiter */ }
 }
 function sessions(m) {
   return (data[m] || []).slice().sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
@@ -373,7 +444,7 @@ function renderDetail() {
   h.querySelectorAll(".link-del").forEach(b => b.onclick = () => {
     if (!confirm("Diesen Eintrag wirklich löschen?")) return;
     data[current] = (data[current] || []).filter(s => s.id !== Number(b.dataset.id));
-    persist(); renderDetail(); toast("Eintrag gelöscht");
+    persist([current]); renderDetail(); toast("Eintrag gelöscht");
   });
 }
 
@@ -387,18 +458,28 @@ function save() {
   if (!sets.length) return toast("Bitte Kilo und Wiederholungen eingeben");
   const note = document.getElementById("note").value.trim();
   (data[current] ||= []).push({ id: Date.now(), date, sets, note });
-  persist();
+  persist([current]);
   document.getElementById("note").value = "";
   renderDetail();
   toast("Gespeichert ✓");
 }
 
 /* ---------- Export / Import ---------- */
-function exportData() {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+async function exportData() {
+  const json = JSON.stringify(data, null, 2);
+  const filename = `gym-daten-${today()}.json`;
+  try {
+    const dl = window.claude && window.claude.use ? await window.claude.use("downloads") : null;
+    if (dl) {
+      try { await dl.save({ filename, data: json }); toast("Gesichert ✓"); }
+      catch (e) { if (!e || e.code !== "declined") toast("Sichern nicht möglich"); }
+      return;
+    }
+  } catch {}
+  const blob = new Blob([json], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `gym-daten-${today()}.json`;
+  a.download = filename;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
@@ -407,9 +488,14 @@ function importData(file) {
   r.onload = () => {
     try {
       const obj = JSON.parse(r.result);
-      if (typeof obj !== "object" || Array.isArray(obj)) throw 0;
+      if (!obj || typeof obj !== "object" || Array.isArray(obj)) throw 0;
+      const clean = {};
+      for (const m of MACHINES) if (Array.isArray(obj[m])) clean[m] = obj[m].filter(s => s && typeof s.date === "string" && Array.isArray(s.sets)).map(s => ({
+        id: Number(s.id) || Date.now() + Math.random(), date: s.date.slice(0, 10), note: String(s.note || ""),
+        sets: s.sets.map(x => ({ kg: Number(x.kg) || 0, reps: Number(x.reps) || 0 }))
+      }));
       if (!confirm("Vorhandene Daten durch die Datei ersetzen?")) return;
-      data = obj; persist(); renderGrid(); toast("Daten geladen ✓");
+      data = clean; persist(); renderGrid(); toast("Daten geladen ✓");
     } catch { toast("Ungültige Datei"); }
   };
   r.readAsText(file);
@@ -433,6 +519,7 @@ window.addEventListener("popstate", () => {
 });
 
 renderGrid();
+initCloud();
 const startM = decodeURIComponent(location.hash.slice(1));
 if (MACHINES.includes(startM)) { history.replaceState(null, "", location.pathname); openMachine(startM); }
 </script>
